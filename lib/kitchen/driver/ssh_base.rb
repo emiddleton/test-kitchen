@@ -36,19 +36,26 @@ module Kitchen
       end
 
       def converge(state)
-        provisioner = instance.provisioner
-        provisioner.create_sandbox
-        sandbox_dirs = Dir.glob("#{provisioner.sandbox_path}/*")
-
-        Kitchen::SSH.new(*build_ssh_args(state)) do |conn|
-          run_remote(provisioner.install_command, conn)
-          run_remote(provisioner.init_command, conn)
-          transfer_path(sandbox_dirs, provisioner[:root_path], conn)
-          run_remote(provisioner.prepare_command, conn)
-          run_remote(provisioner.run_command, conn)
-        end
-      ensure
-        provisioner && provisioner.cleanup_sandbox
+	# allow multiple provisioning runs
+	step = 1
+	instance.provisioners.each do |provisioner|
+	  begin
+	    info("Running Step #{step}")
+	    provisioner.create_sandbox
+            sandbox_dirs = Dir.glob("#{provisioner.sandbox_path}/*")
+	    wait_for_sshd(*build_ssh_args(state))
+	    Kitchen::SSH.new(*build_ssh_args(state)) do |conn|
+	      run_remote(provisioner.install_command, conn)
+              run_remote(provisioner.init_command, conn)
+              transfer_path(sandbox_dirs, provisioner[:root_path], conn)
+              run_remote(provisioner.prepare_command, conn)
+              run_remote(provisioner.run_command, conn)
+	    end
+          ensure
+            provisioner && provisioner.cleanup_sandbox
+	  end
+	  step += 1
+	end
       end
 
       def setup(state)

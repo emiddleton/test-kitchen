@@ -54,7 +54,7 @@ module Kitchen
     # @return [Provisioner::Base] provisioner object which will the setup
     #   and invocation instructions for configuration management and other
     #   automation tools
-    attr_reader :provisioner
+    attr_reader :provisioners
 
     # @return [Busser] busser object for instance to manage the busser
     #   installation on this instance
@@ -69,7 +69,7 @@ module Kitchen
     # @option options [Suite] :suite the suite (**Required)
     # @option options [Platform] :platform the platform (**Required)
     # @option options [Driver::Base] :driver the driver (**Required)
-    # @option options [Provisioner::Base] :provisioner the provisioner
+    # @option options Array[Provisioner::Base] :provisioners the provisioners
     #   (**Required)
     # @option options [Busser] :busser the busser logger (**Required**)
     # @option options [Logger] :logger the instance logger
@@ -84,13 +84,13 @@ module Kitchen
       @platform     = options.fetch(:platform)
       @name         = self.class.name_for(@suite, @platform)
       @driver       = options.fetch(:driver)
-      @provisioner  = options.fetch(:provisioner)
+      @provisioners = options.fetch(:provisioners)
       @busser       = options.fetch(:busser)
       @logger       = options.fetch(:logger) { Kitchen.logger }
       @state_file   = options.fetch(:state_file)
 
       setup_driver
-      setup_provisioner
+      setup_provisioners
     end
 
     def to_str
@@ -198,7 +198,7 @@ module Kitchen
     # @return [Hash] a diagnostic hash
     def diagnose
       result = Hash.new
-      [:state_file, :driver, :provisioner, :busser].each do |sym|
+      [:state_file, :driver, :provisioners, :busser].each do |sym|
         obj = send(sym)
         result[sym] = obj.respond_to?(:diagnose) ? obj.diagnose : :unknown
       end
@@ -214,7 +214,7 @@ module Kitchen
     attr_reader :state_file
 
     def validate_options(options)
-      [:suite, :platform, :driver, :provisioner, :busser, :state_file].each do |k|
+      [:suite, :platform, :driver, :provisioners, :busser, :state_file].each do |k|
         if !options.has_key?(k)
           raise ClientError, "Instance#new requires option :#{k}"
         end
@@ -236,8 +236,10 @@ module Kitchen
       end
     end
 
-    def setup_provisioner
-      @provisioner.instance = self
+    def setup_provisioners
+      @provisioners.each do |provisioner|
+        provisioner.instance = self
+      end
     end
 
     def transition_to(desired)

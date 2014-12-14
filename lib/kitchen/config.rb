@@ -131,7 +131,7 @@ module Kitchen
         :logger       => new_logger(suite, platform, index),
         :suite        => suite,
         :platform     => platform,
-        :provisioner  => new_provisioner(suite, platform),
+        :provisioners => new_provisioners(suite, platform),
         :state_file   => new_state_file(suite, platform)
       )
     end
@@ -147,9 +147,8 @@ module Kitchen
       )
     end
 
-    def new_provisioner(suite, platform)
-      pdata = data.provisioner_data_for(suite.name, platform.name)
-      Provisioner.for_plugin(pdata[:name], pdata)
+    def new_provisioners(suite, platform)
+      data.provisioners_for(suite.name,platform.name)
     end
 
     def new_state_file(suite, platform)

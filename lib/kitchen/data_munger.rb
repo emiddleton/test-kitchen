@@ -58,6 +58,22 @@ module Kitchen
       data.fetch(:platforms, [])
     end
 
+    def provisioners_for(suite_name, platform)
+      # check if suite name otherwise is a suite step
+      if data.fetch(:suites, []).find{|suite|suite[:name]==suite_name}
+        pdata = provisioner_data_for(suite_name, platform)
+	[Provisioner.for_plugin(pdata[:name], pdata)]
+      else
+        name, step =* suite_name.split(/_step_/)
+	(1..step.to_i).inject([]) do |steps,cnt|
+	  pdata = provisioner_data_for("#{name}_step_#{cnt}", platform)
+	  prov = Provisioner.for_plugin(pdata[:name], pdata)
+	  steps << prov
+	  steps
+	end
+      end
+    end
+
     def provisioner_data_for(suite, platform)
       merged_data_for(:provisioner, suite, platform).tap do |pdata|
         set_kitchen_config_at!(pdata, :kitchen_root)
@@ -68,7 +84,17 @@ module Kitchen
     end
 
     def suite_data
-      data.fetch(:suites, [])
+      @suite_data ||= data.fetch(:suites, []).inject([]) do |suites,suite|
+        if suite[:steps]
+	  suite[:steps].each_with_index do |sub_suite,index|
+	    sub_suite[:name] = "#{suite[:name]}_step_#{index+1}"
+	    suites << sub_suite
+	  end
+	else
+	  suites << suite
+	end
+	suites
+      end
     end
 
     private
@@ -148,7 +174,7 @@ module Kitchen
     end
 
     def move_chef_data_to_provisioner!
-      data.fetch(:suites, []).each do |suite|
+      suite_data.each do |suite|
         move_chef_data_to_provisioner_at!(suite, :attributes)
         move_chef_data_to_provisioner_at!(suite, :run_list)
       end
@@ -163,8 +189,9 @@ module Kitchen
       if root.has_key?(key)
         pdata = root.fetch(:provisioner, Hash.new)
         pdata = { :name => pdata } if pdata.is_a?(String)
-        if ! root.fetch(key, nil).nil?
-          root[:provisioner] = pdata.rmerge({ key => root.delete(key) })
+	if ! root.fetch(key, nil).nil?
+	  root[:provisioner] = pdata.rmerge({ key => root.delete(key) })
+	  root[:provisioner]
         end
       end
     end
@@ -217,8 +244,8 @@ module Kitchen
     end
 
     def suite_data_for(name)
-      data.fetch(:suites, Hash.new).find(lambda { Hash.new }) do |suite|
-        suite.fetch(:name, nil) == name
+      suite_data.find(lambda { Hash.new }) do |suite|
+	suite.fetch(:name, nil) == name
       end
     end
   end
